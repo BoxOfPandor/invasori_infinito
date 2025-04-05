@@ -48,6 +48,13 @@ class ScenaGioco(Scena):
         """Inizializza gli elementi del gioco"""
         super().inizializza()
 
+        # Reset game state
+        self.game_over_status = False
+        self.vite = 5
+        self.punteggio = 0
+        self.lasers.clear()
+        self.nemici.clear()
+
         # Carica l'immagine di sfondo
         percorso_sfondo = os.path.join("assets", "img", "sfondo_gioco.jpg")
         try:
