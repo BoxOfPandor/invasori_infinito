@@ -20,6 +20,14 @@ class Gioco:
         self.larghezza = larghezza
         self.altezza = altezza
         self.fps = fps
+    
+        # Centra la finestra sullo schermo
+        import os
+        os.environ['SDL_VIDEO_CENTERED'] = '1'
+    
+        # Iniziamo con la dimensione del menu
+        self.schermo = pygame.display.set_mode((config.MENU_LARGHEZZA, config.MENU_ALTEZZA))
+        pygame.display.set_caption(titolo)
 
         # Iniziamo con la dimensione del menu
         self.schermo = pygame.display.set_mode((config.MENU_LARGHEZZA, config.MENU_ALTEZZA))

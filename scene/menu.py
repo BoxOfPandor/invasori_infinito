@@ -27,21 +27,45 @@ class MenuPrincipale(Scena):
 
     def carica_e_ritaglia_immagine(self, percorso, larghezza_finale, altezza_finale):
         """Carica un'immagine e la ritaglia mantenendo la parte centrale"""
-        # Carica l'immagine originale
-        immagine_originale = pygame.image.load(percorso).convert()
-
-        # Dimensioni originali
-        larghezza_originale = immagine_originale.get_width()
-        altezza_originale = immagine_originale.get_height()
-
-        # Calcola le coordinate per ritagliare (prende il centro dell'immagine)
-        x_inizio = (larghezza_originale - larghezza_finale) // 2
-        y_inizio = (altezza_originale - altezza_finale) // 2
-
-        # Ritaglia l'immagine
-        immagine_ritagliata = pygame.Surface((larghezza_finale, altezza_finale))
-        immagine_ritagliata.blit(immagine_originale, (0, 0),
-                                (x_inizio, y_inizio, x_inizio + larghezza_finale, y_inizio + altezza_finale))
+        try:
+            # Carica l'immagine originale
+            immagine_originale = pygame.image.load(percorso).convert()
+            
+            # Dimensioni originali
+            larghezza_originale = immagine_originale.get_width()
+            altezza_originale = immagine_originale.get_height()
+            
+            # Calcola il rapporto di aspetto
+            rapporto_originale = larghezza_originale / altezza_originale
+            rapporto_finale = larghezza_finale / altezza_finale
+            
+            # Determina come ritagliare l'immagine in base ai rapports
+            if rapporto_originale > rapporto_finale:
+                # L'immagine è troppo large, la rogniamo sur les côtés
+                nuova_larghezza = int(altezza_originale * rapporto_finale)
+                x_inizio = (larghezza_originale - nuova_larghezza) // 2
+                y_inizio = 0
+                area_ritaglio = (x_inizio, y_inizio, nuova_larghezza, altezza_originale)
+            else:
+                # L'immagine è troppo haute, la rogniamo en haut et en bas
+                nuova_altezza = int(larghezza_originale / rapporto_finale)
+                x_inizio = 0
+                y_inizio = (altezza_originale - nuova_altezza) // 2
+                area_ritaglio = (x_inizio, y_inizio, larghezza_originale, nuova_altezza)
+            
+            # Ritaglia l'immagine
+            immagine_ritagliata = pygame.Surface((area_ritaglio[2], area_ritaglio[3]))
+            immagine_ritagliata.blit(immagine_originale, (0, 0), area_ritaglio)
+            
+            # Ridimensiona al formato finale
+            return pygame.transform.scale(immagine_ritagliata, (larghezza_finale, altezza_finale))
+        
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"Errore nel caricamento dell'immagine: {e}")
+            # Fallback: crea una superficie vuota con la dimensione richiesta
+            superficie = pygame.Surface((larghezza_finale, altezza_finale))
+            superficie.fill((0, 0, 0))  # Riempi di nero
+            return superficie
 
         return immagine_ritagliata
 
@@ -89,12 +113,12 @@ class MenuPrincipale(Scena):
         if evento.type == pygame.MOUSEMOTION:
             # Controlla se il mouse è sopra il pulsante
             self.mouse_su_pulsante = self.pulsante_start.collidepoint(evento.pos)
-
+        
         elif evento.type == pygame.MOUSEBUTTONDOWN:
             if evento.button == 1 and self.mouse_su_pulsante:  # Clic sinistro
-                print("Avvio del gioco")
-                # Passa alla scena di gioco
-                self.gioco.cambia_scena("gioco")
+                print("Avvio dell'introduzione")
+                # Prima passa alla scena di introduzione
+                self.gioco.cambia_scena("intro")
 
     def aggiorna(self, delta_tempo):
         """Aggiorna la logica del menu"""
