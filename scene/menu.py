@@ -86,9 +86,9 @@ class MenuPrincipale(Scena):
         
         elif evento.type == pygame.MOUSEBUTTONDOWN:
             if evento.button == 1 and self.mouse_su_pulsante:  # Clic sinistro
-                print("game launch")
-                # Qui potresti passare alla scena di gioco effettiva
-                # self.gioco.cambia_scena("gioco")
+                print("Avvio del gioco")
+                # Passa alla scena di gioco
+                self.gioco.cambia_scena("gioco")
     
     def aggiorna(self, delta_tempo):
         """Aggiorna la logica del menu"""
@@ -114,6 +114,6 @@ class MenuPrincipale(Scena):
         pygame.draw.rect(schermo, (255, 255, 255), self.pulsante_start, 2, border_radius=10)  # Bordo bianco
         
         # Testo del pulsante
-        testo_start = self.font_pulsante.render("START", True, (255, 255, 255))
+        testo_start = self.font_pulsante.render("INIZIO", True, (255, 255, 255))
         testo_rect = testo_start.get_rect(center=self.pulsante_start.center)
         schermo.blit(testo_start, testo_rect)

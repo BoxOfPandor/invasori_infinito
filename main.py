@@ -10,6 +10,7 @@ import sys
 from core.gioco import Gioco
 import config
 from scene.menu import MenuPrincipale
+from scene.gioco import ScenaGioco
 
 def main():
     """Funzione principale che avvia il gioco"""
@@ -28,7 +29,10 @@ def main():
     
     # Aggiungi le scene al gioco
     menu_principale = MenuPrincipale(alieno_invader)
+    scena_gioco = ScenaGioco(alieno_invader)
+    
     alieno_invader.gestore_scene.aggiungi_scena("menu", menu_principale)
+    alieno_invader.gestore_scene.aggiungi_scena("gioco", scena_gioco)
     
     # Imposta la scena iniziale come menu principale
     alieno_invader.gestore_scene.cambia_scena("menu")
