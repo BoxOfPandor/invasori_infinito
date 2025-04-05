@@ -26,7 +26,7 @@ class ScenaGioco(Scena):
         self.nave_giocatore = None
         self.lasers = []  # Lista per tenere traccia dei laser attivi
         self.nemici = []
-        self.vite = 5  # Giocatore inizia con 5 vite
+        self.vite = 4  # Giocatore inizia con 4 vite
         self.game_over_status = False
 
         # Parametri di spawn dei nemici
@@ -50,7 +50,7 @@ class ScenaGioco(Scena):
 
         # Reset game state
         self.game_over_status = False
-        self.vite = 5
+        self.vite = 4
         self.punteggio = 0
         self.lasers.clear()
         self.nemici.clear()
@@ -226,6 +226,12 @@ class ScenaGioco(Scena):
     def perdi_vita(self):
         """Gestisce la perdita di una vita"""
         self.vite -= 1
+
+        # Update the ship's damage level when the player loses a life
+        if self.nave_giocatore:
+            self.nave_giocatore.danno = 4 - self.vite  # Map life count to damage level (0-3)
+            self.nave_giocatore.immagine = self.nave_giocatore.immagini[self.nave_giocatore.danno]
+
         # Controlla se il gioco è finito
         if self.vite <= 0:
             self.game_over()
@@ -335,24 +341,53 @@ class Nave:
         self.ritardo_sparo = 150  # Millisecondi tra uno sparo e l'altro
         self.tempo_ultimo_sparo = 0
 
-        # Carica l'immagine
-        self.immagine = self.carica_immagine()
+        # Livello di danno (0 = nessun danno, 3 = massimo danno)
+        self.danno = 0
+
+        # Immagini per i diversi stati di danno
+        self.immagini = self.carica_immagini()
+        self.immagine = self.immagini[self.danno]
+
+    def carica_immagini(self):
+        """Carica le immagini della nave per i diversi livelli di danno"""
+        immagini = []
+        nomi_file = [
+            "Main Ship - Base - Full health.png",  # Nave intatta
+            "Main Ship - Base - Slight damage.png",  # Danno leggero
+            "Main Ship - Base - Damaged.png",  # Danno medio
+            "Main Ship - Base - Very damaged.png"  # Danno grave
+        ]
+
+        for nome_file in nomi_file:
+            try:
+                # Fix the path to match the actual directory structure
+                percorso = os.path.join("entita", "Nave", nome_file)
+                immagine = pygame.image.load(percorso).convert_alpha()
+                immagini.append(pygame.transform.scale(immagine, (self.larghezza, self.altezza)))
+            except Exception as e:
+                print(f"Errore nel caricamento dell'immagine {nome_file}: {e}")
+                # Create a placeholder with different color based on damage level
+                superficie = pygame.Surface((self.larghezza, self.altezza), pygame.SRCALPHA)
+                colore = (
+                    (0, 255, 0) if len(immagini) == 0 else  # Verde per nave intatta
+                    (255, 255, 0) if len(immagini) == 1 else  # Giallo per danno leggero
+                    (255, 165, 0) if len(immagini) == 2 else  # Arancione per danno medio
+                    (255, 0, 0)  # Rosso per danno grave
+                )
+                pygame.draw.rect(superficie, colore, (0, 0, self.larghezza, self.altezza))
+                immagini.append(superficie)
+
+        return immagini
+
+    def aumenta_danno(self):
+        """Aumenta il livello di danno della nave e aggiorna l'immagine"""
+        self.danno = min(self.danno + 1, 3)  # Massimo 3 livelli di danno
+        self.immagine = self.immagini[self.danno]
+        return self.danno
 
     def carica_immagine(self):
-        """Carica l'immagine della nave o crea un placeholder"""
-        try:
-            percorso = os.path.join("assets", "img", "nave.png")
-            immagine = pygame.image.load(percorso).convert_alpha()
-            return pygame.transform.scale(immagine, (self.larghezza, self.altezza))
-        except:
-            # Se l'immagine non è disponibile, crea un placeholder
-            superficie = pygame.Surface((self.larghezza, self.altezza), pygame.SRCALPHA)
-            pygame.draw.polygon(superficie, (0, 255, 0), [
-                (self.larghezza // 2, 0),
-                (0, self.altezza),
-                (self.larghezza, self.altezza)
-            ])
-            return superficie
+        """Funzione di compatibilità per il codice esistente"""
+        return self.immagini[0]
 
     def aggiorna(self, delta_tempo):
         """Aggiorna la posizione della nave"""

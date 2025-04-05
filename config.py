@@ -17,16 +17,16 @@ schermo_larghezza_sicura = int(info_schermo.current_w * 0.9)
 schermo_altezza_sicura = int(info_schermo.current_h * 0.9)
 
 # Dimensioni della finestra di menu
-MENU_LARGHEZZA = min(1024, schermo_larghezza_sicura)
-MENU_ALTEZZA = min(768, schermo_altezza_sicura)
+MENU_LARGHEZZA = 1024
+MENU_ALTEZZA = 768
 
-# Dimensioni per la finestra di gioco (non fullscreen)
-GIOCO_LARGHEZZA = min(800, schermo_larghezza_sicura)  # Massimo 800 pixel di larghezza
-GIOCO_ALTEZZA = min(int(schermo_altezza_sicura * 0.9), schermo_altezza_sicura)  # 90% dell'altezza sicura
+# Dimensioni per la finestra di gioco
+GIOCO_LARGHEZZA = 800
+GIOCO_ALTEZZA = 600
 
-# Dimensioni massime della finestra di gioco (per rifermento)
-LARGHEZZA_SCHERMO = schermo_larghezza_sicura
-ALTEZZA_SCHERMO = schermo_altezza_sicura
+# Mantieni queste dimensioni come riferimento
+LARGHEZZA_SCHERMO = 1024
+ALTEZZA_SCHERMO = 768
 
 # Configurazioni della finestra
 TITOLO_GIOCO = "Invasori Infinito"
