@@ -25,6 +25,24 @@ class ScenaGioco(Scena):
         self.margine_laterale = 0
         self.nave_giocatore = None
         self.lasers = []  # Lista per tenere traccia dei laser attivi
+        self.nemici = []
+        self.vite = 5  # Giocatore inizia con 5 vite
+        self.game_over_status = False
+
+        # Parametri di spawn dei nemici
+        self.intervallo_spawn_base = 1500  # Intervallo base (1.5 secondi)
+        self.intervallo_spawn_minimo = 300  # Intervallo minimo (0.3 secondi)
+        self.tempo_ultimo_spawn = 0
+
+    def calcola_intervallo_spawn(self):
+        """Calcola l'intervallo di spawn in base al punteggio"""
+        # Formula: ogni 100 punti, diminuisce l'intervallo del 10%
+        # fino a raggiungere l'intervallo minimo
+        riduzione = min(self.punteggio // 100 * 0.1, 0.8)  # Max 80% di riduzione
+        intervallo = self.intervallo_spawn_base * (1 - riduzione)
+
+        # Assicura che l'intervallo non scenda sotto il minimo
+        return max(int(intervallo), self.intervallo_spawn_minimo)
 
     def inizializza(self):
         """Inizializza gli elementi del gioco"""
@@ -117,6 +135,15 @@ class ScenaGioco(Scena):
 
     def gestisci_evento(self, evento):
         """Gestisce gli eventi di input"""
+        if evento.type == pygame.USEREVENT:
+            # Timer per il game over
+            pygame.time.set_timer(pygame.USEREVENT, 0)  # Disattiva il timer
+            self.gioco.cambia_scena("menu")
+            return
+
+        if self.game_over_status:
+            return
+
         if evento.type == pygame.KEYDOWN:
             if evento.key == pygame.K_LEFT:
                 self.nave_giocatore.movimento_sinistra = True
@@ -135,6 +162,10 @@ class ScenaGioco(Scena):
 
     def aggiorna(self, delta_tempo):
         """Aggiorna la logica del gioco"""
+        # Controlla se game over
+        if self.game_over_status:
+            return
+
         # Aggiorna la nave del giocatore
         self.nave_giocatore.aggiorna(delta_tempo)
 
@@ -151,14 +182,28 @@ class ScenaGioco(Scena):
             if not laser.attivo:
                 self.lasers.remove(laser)
 
-        # Gestione spawn nemici
-        if tempo_corrente - self.tempo_ultimo_spawn > self.intervallo_spawn:
+        # Nel metodo aggiorna, sostituisci:
+        # if tempo_corrente - self.tempo_ultimo_spawn > self.intervallo_spawn:
+        # con:
+        if tempo_corrente - self.tempo_ultimo_spawn > self.calcola_intervallo_spawn():
             self.spawn_nemico()
             self.tempo_ultimo_spawn = tempo_corrente
 
-        # Aggiorna tutti i nemici attivi
+        # Aggiorna tutti i nemici attivi e controlla collisioni con giocatore
         for nemico in self.nemici[:]:
             nemico.aggiorna(delta_tempo)
+
+            # Controlla se il nemico ha toccato il fondo
+            if nemico.rect.bottom >= self.nave_giocatore.rect.top:
+                self.perdi_vita()
+                nemico.attivo = False
+
+            # Controlla se il nemico ha colpito il giocatore
+            elif nemico.collide_con(self.nave_giocatore.rect):
+                self.perdi_vita()
+                nemico.attivo = False
+
+            # Rimuovi nemici non attivi
             if not nemico.attivo:
                 self.nemici.remove(nemico)
 
@@ -170,6 +215,20 @@ class ScenaGioco(Scena):
                     if nemico.prendi_danno(1):  # Nemico distrutto
                         self.punteggio += nemico.punti
                     break
+
+    def perdi_vita(self):
+        """Gestisce la perdita di una vita"""
+        self.vite -= 1
+        # Controlla se il gioco è finito
+        if self.vite <= 0:
+            self.game_over()
+
+    def game_over(self):
+        """Gestisce la fine del gioco"""
+        self.game_over_status = True
+        print("Game Over!")
+        # Torna al menu dopo un breve ritardo
+        pygame.time.set_timer(pygame.USEREVENT, 2000)  # 2 secondi di attesa
 
     def spawn_nemico(self):
         """Spawna un nuovo nemico in una posizione casuale"""
@@ -206,10 +265,21 @@ class ScenaGioco(Scena):
         for nemico in self.nemici:
             nemico.disegna(schermo)
 
-        # Disegna il punteggio
+        # Disegna il punteggio e le vite
         font = pygame.font.SysFont("Arial", 24)
         testo_punteggio = font.render(f"Punti: {self.punteggio}", True, (255, 255, 255))
         schermo.blit(testo_punteggio, (self.area_gioco.left + 10, 20))
+
+        testo_vite = font.render(f"Vite: {self.vite}", True, (255, 255, 255))
+        schermo.blit(testo_vite, (self.area_gioco.right - testo_vite.get_width() - 10, 20))
+
+        # Mostra game over
+        if self.game_over_status:
+            font_game_over = pygame.font.SysFont("Arial", 72, bold=True)
+            testo_game_over = font_game_over.render("GAME OVER", True, (255, 0, 0))
+            pos_x = (self.gioco.schermo.get_width() - testo_game_over.get_width()) // 2
+            pos_y = (self.gioco.schermo.get_height() - testo_game_over.get_height()) // 2
+            schermo.blit(testo_game_over, (pos_x, pos_y))
 
     def salva_stato(self):
         """Salva lo stato attuale per il rewind"""
@@ -255,7 +325,7 @@ class Nave:
 
         # Sparo
         self.sparo_attivo = False
-        self.ritardo_sparo = 75  # Millisecondi tra uno sparo e l'altro
+        self.ritardo_sparo = 150  # Millisecondi tra uno sparo e l'altro
         self.tempo_ultimo_sparo = 0
 
         # Carica l'immagine
