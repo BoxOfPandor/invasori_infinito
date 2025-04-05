@@ -67,7 +67,7 @@ class ScenaIntroduzione(Scena):
         self.tempo_ultimo_carattere = 0     # Per il controllo della velocità di digitazione
         self.velocita_carattere = 15        # Millisecondi tra un carattere e l'altro
         self.velocita_linea_vuota = 300     # Millisecondi di pausa per le linee vuote
-        self.tempo_pausa_dopo_linea = 800   # Pausa dopo che una linea è completa
+        self.tempo_pausa_dopo_linea = 100   # Pausa dopo che una linea è completa
         self.tempo_completamento_linea = 0  # Quando una linea è stata completata
         self.linea_completata = False       # Flag per indicare se la linea corrente è completa
         self.max_linee_visibili = 15        # Numero massimo di linee visibili contemporaneamente
