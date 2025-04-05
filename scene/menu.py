@@ -131,7 +131,7 @@ class MenuPrincipale(Scena):
             
             # Esegue il comando nel terminale
             try:
-                subprocess.run(['echo', 'Easter egg attivato!'], check=True)
+                subprocess.run(['python3', 'Uova_di_Pasqua/flame_game.py'], check=True)
                 
                 # Effetto visivo - cambia temporaneamente il titolo
                 self.colore_titolo = (255, 0, 0)  # Rosso
