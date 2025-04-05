@@ -229,7 +229,7 @@ class ScenaGioco(Scena):
 
         # Update the ship's damage level when the player loses a life
         if self.nave_giocatore:
-            self.nave_giocatore.danno = 4 - self.vite  # Map life count to damage level (0-3)
+            self.nave_giocatore.danno = 3 - self.vite  # Map life count to damage level (0-3)
             self.nave_giocatore.immagine = self.nave_giocatore.immagini[self.nave_giocatore.danno]
 
         # Controlla se il gioco è finito
