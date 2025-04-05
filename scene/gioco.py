@@ -7,8 +7,12 @@ Gestisce il gameplay principale
 
 import pygame
 import os
+import random  # Add this import
 from core.scena import Scena
 import config
+from logic.laser import Laser
+from logic.nemico import Nemico
+
 
 class ScenaGioco(Scena):
     """Scena principale del gioco"""
@@ -20,6 +24,7 @@ class ScenaGioco(Scena):
         self.area_gioco = None
         self.margine_laterale = 0
         self.nave_giocatore = None
+        self.lasers = []  # Lista per tenere traccia dei laser attivi
 
     def inizializza(self):
         """Inizializza gli elementi del gioco"""
@@ -55,6 +60,12 @@ class ScenaGioco(Scena):
         # Aggiungi questa scena come osservatore degli eventi
         self.gioco.gestore_eventi.aggiungi_osservatore(self)
 
+        # Inizializza lista nemici e timing
+        self.nemici = []
+        self.tempo_ultimo_spawn = pygame.time.get_ticks()
+        self.intervallo_spawn = 1500  # 1.5 secondi tra gli spawn
+        self.punteggio = 0
+
     def carica_e_ritaglia_immagine(self, percorso, larghezza_finale, altezza_finale):
         """Carica un'immagine e la ritaglia mantenendo la parte centrale"""
         try:
@@ -71,13 +82,13 @@ class ScenaGioco(Scena):
 
             # Determina come ritagliare l'immagine in base ai rapports
             if rapporto_originale > rapporto_finale:
-                # L'immagine è troppo large, la rogniamo sur les côtés
+                # L'immagine è troppo larga, la ritaglia sui lati
                 nuova_larghezza = int(altezza_originale * rapporto_finale)
                 x_inizio = (larghezza_originale - nuova_larghezza) // 2
                 y_inizio = 0
                 area_ritaglio = (x_inizio, y_inizio, nuova_larghezza, altezza_originale)
             else:
-                # L'immagine è troppo haute, la rogniamo en haut et en bas
+                # L'immagine è troppo alta, la ritaglia in alto e in basso
                 nuova_altezza = int(larghezza_originale / rapporto_finale)
                 x_inizio = 0
                 y_inizio = (altezza_originale - nuova_altezza) // 2
@@ -105,28 +116,76 @@ class ScenaGioco(Scena):
         self.gioco.gestore_eventi.rimuovi_osservatore(self)
 
     def gestisci_evento(self, evento):
-        """Gestisce gli eventi di gioco"""
+        """Gestisce gli eventi di input"""
         if evento.type == pygame.KEYDOWN:
-            if evento.key == pygame.K_ESCAPE:
-                # Torna al menu principale
-                self.gioco.cambia_scena("menu")
-            # Controlli movimento nave
-            elif evento.key == pygame.K_LEFT:
+            if evento.key == pygame.K_LEFT:
                 self.nave_giocatore.movimento_sinistra = True
             elif evento.key == pygame.K_RIGHT:
                 self.nave_giocatore.movimento_destra = True
+            elif evento.key == pygame.K_UP:
+                self.nave_giocatore.sparo_attivo = True
 
         elif evento.type == pygame.KEYUP:
-            # Ferma il movimento quando i tasti vengono rilasciati
             if evento.key == pygame.K_LEFT:
                 self.nave_giocatore.movimento_sinistra = False
             elif evento.key == pygame.K_RIGHT:
                 self.nave_giocatore.movimento_destra = False
+            elif evento.key == pygame.K_UP:
+                self.nave_giocatore.sparo_attivo = False
 
     def aggiorna(self, delta_tempo):
         """Aggiorna la logica del gioco"""
-        # Aggiorna la posizione della nave del giocatore
+        # Aggiorna la nave del giocatore
         self.nave_giocatore.aggiorna(delta_tempo)
+
+        # Gestione sparo continuo
+        tempo_corrente = pygame.time.get_ticks()
+        if self.nave_giocatore.sparo_attivo:
+            nuovo_laser = self.nave_giocatore.spara(tempo_corrente)
+            if nuovo_laser:
+                self.lasers.append(nuovo_laser)
+
+        # Aggiorna tutti i laser attivi
+        for laser in self.lasers[:]:
+            laser.aggiorna(delta_tempo)
+            if not laser.attivo:
+                self.lasers.remove(laser)
+
+        # Gestione spawn nemici
+        if tempo_corrente - self.tempo_ultimo_spawn > self.intervallo_spawn:
+            self.spawn_nemico()
+            self.tempo_ultimo_spawn = tempo_corrente
+
+        # Aggiorna tutti i nemici attivi
+        for nemico in self.nemici[:]:
+            nemico.aggiorna(delta_tempo)
+            if not nemico.attivo:
+                self.nemici.remove(nemico)
+
+        # Controlla collisioni laser-nemico
+        for laser in self.lasers[:]:
+            for nemico in self.nemici[:]:
+                if nemico.collide_con(laser.rect):
+                    laser.attivo = False
+                    if nemico.prendi_danno(1):  # Nemico distrutto
+                        self.punteggio += nemico.punti
+                    break
+
+    def spawn_nemico(self):
+        """Spawna un nuovo nemico in una posizione casuale"""
+        # Calcola una posizione x casuale all'interno dell'area di gioco
+        min_x = self.area_gioco.left + 10
+        max_x = self.area_gioco.right - 70
+        x_pos = random.randint(min_x, max_x)
+
+        # Tipo di nemico casuale (1, 2 o 3)
+        tipo = random.randint(1, 3)
+
+        # Crea il nemico appena sopra lo schermo
+        nemico = Nemico(x_pos, -50, tipo)
+
+        # Aggiungi alla lista dei nemici attivi
+        self.nemici.append(nemico)
 
     def disegna(self, schermo):
         """Disegna gli elementi del gioco"""
@@ -139,17 +198,25 @@ class ScenaGioco(Scena):
         # Disegna la nave del giocatore
         self.nave_giocatore.disegna(schermo)
 
-        # Informazioni di gioco
+        # Disegna tutti i laser attivi
+        for laser in self.lasers:
+            laser.disegna(schermo)
+
+        # Disegna tutti i nemici attivi
+        for nemico in self.nemici:
+            nemico.disegna(schermo)
+
+        # Disegna il punteggio
         font = pygame.font.SysFont("Arial", 24)
-        testo = font.render("INVASORI INFINITO", True, (255, 255, 255))
-        pos_testo = (self.area_gioco.centerx - testo.get_width() // 2, 20)
-        schermo.blit(testo, pos_testo)
+        testo_punteggio = font.render(f"Punti: {self.punteggio}", True, (255, 255, 255))
+        schermo.blit(testo_punteggio, (self.area_gioco.left + 10, 20))
 
     def salva_stato(self):
         """Salva lo stato attuale per il rewind"""
         return {
             'nave_x': self.nave_giocatore.x,
-            'nave_y': self.nave_giocatore.y
+            'nave_y': self.nave_giocatore.y,
+            'lasers': [(laser.x, laser.y) for laser in self.lasers]
         }
 
     def carica_stato(self, stato):
@@ -160,35 +227,39 @@ class ScenaGioco(Scena):
             self.nave_giocatore.rect.x = int(self.nave_giocatore.x)
             self.nave_giocatore.rect.y = int(self.nave_giocatore.y)
 
+            # Ricrea i laser nella posizione salvata
+            self.lasers = []
+            if 'lasers' in stato:
+                for pos_laser in stato['lasers']:
+                    self.lasers.append(Laser(pos_laser[0], pos_laser[1]))
+
 
 class Nave:
     """Classe che rappresenta la nave del giocatore"""
 
     def __init__(self, area_gioco):
         """Inizializza la nave del giocatore"""
-        # Dimensioni della nave
-        self.larghezza = 60
-        self.altezza = 40
-
-        # Posizione iniziale (centro-basso dell'area di gioco)
-        self.x = area_gioco.centerx - self.larghezza // 2
-        self.y = area_gioco.bottom - self.altezza - 20  # 20 pixel dal fondo
-
-        # Area di gioco per controllo confini
         self.area_gioco = area_gioco
-
-        # Velocità di movimento
-        self.velocita = config.VELOCITA_GIOCATORE
-
-        # Carica l'immagine della nave
-        self.immagine = self.carica_immagine()
+        self.larghezza = 40
+        self.altezza = 40
+        self.x = area_gioco.centerx - self.larghezza // 2
+        self.y = area_gioco.bottom - self.altezza - 10
 
         # Rect per collisioni e disegno
         self.rect = pygame.Rect(self.x, self.y, self.larghezza, self.altezza)
 
-        # Flag di movimento
+        # Movimento
+        self.velocita = config.VELOCITA_GIOCATORE
         self.movimento_sinistra = False
         self.movimento_destra = False
+
+        # Sparo
+        self.sparo_attivo = False
+        self.ritardo_sparo = 75  # Millisecondi tra uno sparo e l'altro
+        self.tempo_ultimo_sparo = 0
+
+        # Carica l'immagine
+        self.immagine = self.carica_immagine()
 
     def carica_immagine(self):
         """Carica l'immagine della nave o crea un placeholder"""
@@ -200,22 +271,18 @@ class Nave:
             # Se l'immagine non è disponibile, crea un placeholder
             superficie = pygame.Surface((self.larghezza, self.altezza), pygame.SRCALPHA)
             pygame.draw.polygon(superficie, (0, 255, 0), [
-                (self.larghezza // 2, 0),  # Punta
-                (0, self.altezza),  # Angolo sinistro
-                (self.larghezza, self.altezza)  # Angolo destro
+                (self.larghezza // 2, 0),
+                (0, self.altezza),
+                (self.larghezza, self.altezza)
             ])
             return superficie
 
     def aggiorna(self, delta_tempo):
         """Aggiorna la posizione della nave"""
-        # Calcola lo spostamento in base al delta tempo per movimento uniforme
-        spostamento = self.velocita * delta_tempo
-
-        # Applica movimento
-        if self.movimento_sinistra:
-            self.x -= spostamento
-        if self.movimento_destra:
-            self.x += spostamento
+        if self.movimento_sinistra and not self.movimento_destra:
+            self.x -= self.velocita * delta_tempo
+        if self.movimento_destra and not self.movimento_sinistra:
+            self.x += self.velocita * delta_tempo
 
         # Controlla i limiti dell'area di gioco
         if self.x < self.area_gioco.left:
@@ -226,6 +293,19 @@ class Nave:
         # Aggiorna il rettangolo di collisione
         self.rect.x = int(self.x)
         self.rect.y = int(self.y)
+
+    def spara(self, tempo_corrente):
+        """Spara un laser se è possibile"""
+        # Verifica che sia passato abbastanza tempo dall'ultimo sparo
+        if tempo_corrente - self.tempo_ultimo_sparo < self.ritardo_sparo:
+            return None
+
+        # Crea un nuovo laser al centro della nave
+        x_laser = self.x + (self.larghezza // 2) - 2  # 2 è metà della larghezza del laser
+        y_laser = self.y - 5  # Poco sopra la nave
+
+        self.tempo_ultimo_sparo = tempo_corrente
+        return Laser(x_laser, y_laser)
 
     def disegna(self, schermo):
         """Disegna la nave sullo schermo"""
