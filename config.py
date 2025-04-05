@@ -11,15 +11,21 @@ pygame.init()
 
 # Ottieni la risoluzione dello schermo
 info_schermo = pygame.display.Info()
+
+# Dimensioni della finestra di menu (più piccole del full screen)
+MENU_LARGHEZZA = 1024
+MENU_ALTEZZA = 768
+
+# Dimensioni massime della finestra di gioco
 LARGHEZZA_SCHERMO = info_schermo.current_w
 ALTEZZA_SCHERMO = info_schermo.current_h
 
+# Dimensioni per la finestra di gioco (non fullscreen)
+GIOCO_LARGHEZZA = 800  # Massimo 800 pixel di larghezza
+GIOCO_ALTEZZA = int(ALTEZZA_SCHERMO * 0.8)  # 80% dell'altezza dello schermo
+
 # Configurazioni della finestra
 TITOLO_GIOCO = "Invasori Infinito"
-
-# Se si desidera utilizzare una percentuale della risoluzione dello schermo
-# LARGHEZZA_SCHERMO = int(info_schermo.current_w * 0.8)  # 80% della larghezza
-# ALTEZZA_SCHERMO = int(info_schermo.current_h * 0.8)    # 80% dell'altezza
 
 # Configurazioni di gioco
 FPS = 60
