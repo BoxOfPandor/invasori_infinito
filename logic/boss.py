@@ -178,9 +178,17 @@ class Boss:
 
     def carica_immagine(self):
         """Carica l'immagine del boss"""
-        superficie = pygame.Surface((self.larghezza, self.altezza), pygame.SRCALPHA)
-        pygame.draw.rect(superficie, (255, 0, 0), (0, 0, self.larghezza, self.altezza))
-        return superficie
+        try:
+            # Carica l'immagine dalla directory entita
+            percorso = os.path.join("entita", "boss.png")
+            immagine = pygame.image.load(percorso).convert_alpha()
+            return pygame.transform.scale(immagine, (self.larghezza, self.altezza))
+        except Exception as e:
+            print(f"Errore nel caricamento dell'immagine del boss: {e}")
+            # Crea un placeholder se l'immagine non è disponibile
+            superficie = pygame.Surface((self.larghezza, self.altezza), pygame.SRCALPHA)
+            pygame.draw.rect(superficie, (255, 0, 0), (0, 0, self.larghezza, self.altezza))
+            return superficie
 
     def aggiorna(self, delta_tempo):
         """Aggiorna la posizione e il comportamento del boss"""
