@@ -8,6 +8,7 @@ Gestisce il gameplay principale
 import pygame
 import os
 import random
+import math  # Aggiunto import per la funzione sin
 from core.scena import Scena
 import config
 from logic.laser import Laser
@@ -47,11 +48,19 @@ class ScenaGioco(Scena):
 
     def calcola_intervallo_spawn(self):
         """Calcola l'intervallo di spawn in base al punteggio"""
-        # Formula: ogni 100 punti, diminuisce l'intervallo del 10%
-        # fino a raggiungere l'intervallo minimo
-        riduzione = min(self.punteggio // 100 * 0.1, 0.8)  # Max 80% di riduzione
+        # Calcola un valore di oscillazione tra 0 e 0.3 (30%) basato sul tempo
+        tempo_corrente = pygame.time.get_ticks()
+        oscillazione = 0.3 * (0.5 + 0.5 * math.sin(tempo_corrente / 5000))  # Oscillazione tra 0 e 0.3 con periodo di 10 secondi
+        
+        if self.punteggio <= 2000:
+            # Progressione lineare fino a 2000 punti
+            riduzione = min(self.punteggio / 2000 * 0.8, 0.8)  # Max 80% di riduzione a 2000 punti
+        else:
+            # Dopo 2000 punti, mantiene la difficoltà massima con oscillazione
+            riduzione = 0.8 - oscillazione  # Oscillazione tra 50% e 80% di riduzione
+        
         intervallo = self.intervallo_spawn_base * (1 - riduzione)
-
+        
         # Assicura che l'intervallo non scenda sotto il minimo
         return max(int(intervallo), self.intervallo_spawn_minimo)
 
