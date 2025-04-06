@@ -14,6 +14,7 @@ import config
 from logic.laser import Laser
 from logic.nemico import Nemico
 from logic.power_up import PowerUp
+from logic.boss import Boss, BossLaser, PallaDiFuoco
 
 
 class ScenaGioco(Scena):
@@ -40,27 +41,36 @@ class ScenaGioco(Scena):
         # Parametri per lo spawn dei power-up basato sul punteggio
         self.punteggio_ultimo_power_up = 0
         self.punteggio_intervallo_power_up = 500  # Spawn power-up ogni 500 punti
-        
+
         # Parametri per il messaggio power-up
         self.messaggio_power_up = ""
         self.tempo_messaggio_power_up = 0
         self.durata_messaggio_power_up = 3000  # 3 secondi in millisecondi
+
+        # Parametri per il boss
+        self.boss = None
+        self.laser_boss = []  # Laser sparati dal boss
+        self.palle_fuoco = []  # Palle di fuoco lanciate dal boss
+        self.punteggio_ultimo_boss = 0
+        self.punteggio_intervallo_boss = 2500  # Boss ogni 2500 punti
+        self.livello_boss = 0  # Livello del boss (aumenta ogni volta che viene sconfitto)
+        self.boss_attivo = False
 
     def calcola_intervallo_spawn(self):
         """Calcola l'intervallo di spawn in base al punteggio"""
         # Calcola un valore di oscillazione tra 0 e 0.3 (30%) basato sul tempo
         tempo_corrente = pygame.time.get_ticks()
         oscillazione = 0.3 * (0.5 + 0.5 * math.sin(tempo_corrente / 5000))  # Oscillazione tra 0 e 0.3 con periodo di 10 secondi
-        
+
         if self.punteggio <= 2000:
             # Progressione lineare fino a 2000 punti
             riduzione = min(self.punteggio / 2000 * 0.8, 0.8)  # Max 80% di riduzione a 2000 punti
         else:
             # Dopo 2000 punti, mantiene la difficoltà massima con oscillazione
             riduzione = 0.8 - oscillazione  # Oscillazione tra 50% e 80% di riduzione
-        
+
         intervallo = self.intervallo_spawn_base * (1 - riduzione)
-        
+
         # Assicura che l'intervallo non scenda sotto il minimo
         return max(int(intervallo), self.intervallo_spawn_minimo)
 
@@ -73,6 +83,12 @@ class ScenaGioco(Scena):
         self.vite = 4
         self.punteggio = 0
         self.punteggio_ultimo_power_up = 0
+        self.punteggio_ultimo_boss = 0
+        self.livello_boss = 0
+        self.boss = None
+        self.boss_attivo = False
+        self.laser_boss.clear()
+        self.palle_fuoco.clear()
         self.lasers.clear()
         self.nemici.clear()
         self.power_ups.clear()
@@ -199,9 +215,28 @@ class ScenaGioco(Scena):
             PowerUp.TIPO_SPEED: "VELOCITÀ MOVIMENTO +10%!",
             PowerUp.TIPO_EXTRA_LIFE: "VITA EXTRA!"
         }
-        
+
         self.messaggio_power_up = messaggi.get(tipo_power_up, "POWER-UP!")
         self.tempo_messaggio_power_up = pygame.time.get_ticks()
+
+    def mostra_messaggio_boss(self, sconfitto=False):
+        """Mostra un messaggio che indica l'arrivo o la sconfitta del boss"""
+        if sconfitto:
+            self.messaggio_power_up = f"BOSS SCONFITTO! +{500 * self.livello_boss} PUNTI!"
+        else:
+            self.messaggio_power_up = f"BOSS LIVELLO {self.livello_boss} IN ARRIVO!"
+
+        self.tempo_messaggio_power_up = pygame.time.get_ticks()
+
+    def controlla_boss(self):
+        """Controlla se è ora di far apparire il boss"""
+        if not self.boss_attivo and self.punteggio - self.punteggio_ultimo_boss >= self.punteggio_intervallo_boss:
+            self.livello_boss += 1
+            self.boss = Boss(self.area_gioco, self.livello_boss)
+            self.boss_attivo = True
+            self.mostra_messaggio_boss(False)  # Mostra messaggio di arrivo boss
+            return True
+        return False
 
     def aggiorna(self, delta_tempo):
         """Aggiorna la logica del gioco"""
@@ -225,10 +260,81 @@ class ScenaGioco(Scena):
             if not laser.attivo:
                 self.lasers.remove(laser)
 
-        # Gestione spawn nemici
-        if tempo_corrente - self.tempo_ultimo_spawn > self.calcola_intervallo_spawn():
-            self.spawn_nemico()
-            self.tempo_ultimo_spawn = tempo_corrente
+        # Controlla se è ora di far apparire il boss
+        self.controlla_boss()
+
+        # Gestione del boss attivo
+        if self.boss_attivo and self.boss:
+            # Aggiorna il boss
+            self.boss.aggiorna(delta_tempo)
+
+            # Boss spara laser
+            nuovo_laser = self.boss.spara(tempo_corrente)
+            if nuovo_laser:
+                self.laser_boss.append(nuovo_laser)
+
+            # Boss lancia palle di fuoco (dal livello 2 in poi)
+            if self.livello_boss >= 2:
+                nuova_palla = self.boss.lancia_palla_fuoco(tempo_corrente)
+                if nuova_palla:
+                    self.palle_fuoco.append(nuova_palla)
+
+            # Aggiorna tutti i laser del boss
+            for laser in self.laser_boss[:]:
+                laser.aggiorna(delta_tempo)
+
+                # Controlla se il laser ha colpito il giocatore
+                if laser.rect.colliderect(self.nave_giocatore.rect):
+                    self.perdi_vita()
+                    laser.attivo = False
+
+                # Rimuovi laser non attivi
+                if not laser.attivo:
+                    self.laser_boss.remove(laser)
+
+            # Aggiorna tutte le palle di fuoco
+            for palla in self.palle_fuoco[:]:
+                palla.aggiorna(delta_tempo)
+
+                # Controlla se la palla ha colpito il giocatore
+                if palla.rect.colliderect(self.nave_giocatore.rect):
+                    self.perdi_vita()
+                    palla.attivo = False
+
+                # Se la palla è esplosa, crea i laser dell'esplosione
+                if palla.esplosa:
+                    laser_esplosione = palla.esplodi()
+                    self.laser_boss.extend(laser_esplosione)
+
+                # Rimuovi palle non attive
+                if not palla.attivo:
+                    self.palle_fuoco.remove(palla)
+
+            # Controlla collisioni laser-boss
+            for laser in self.lasers[:]:
+                if self.boss.collide_con(laser.rect):
+                    laser.attivo = False
+                    if self.boss.prendi_danno(1):  # Boss sconfitto
+                        self.boss_attivo = False
+                        self.punteggio_ultimo_boss = self.punteggio
+
+                        # Assegna punti per la sconfitta del boss
+                        punti_boss = 500 * self.livello_boss
+                        self.punteggio += punti_boss
+
+                        # Mostra messaggio
+                        self.mostra_messaggio_boss(True)  # Messaggio di boss sconfitto
+
+                        # Pulisci i laser e le palle di fuoco del boss
+                        self.laser_boss.clear()
+                        self.palle_fuoco.clear()
+
+        # Se non c'è un boss attivo, gestisci lo spawn normale dei nemici
+        if not self.boss_attivo:
+            # Gestione spawn nemici
+            if tempo_corrente - self.tempo_ultimo_spawn > self.calcola_intervallo_spawn():
+                self.spawn_nemico()
+                self.tempo_ultimo_spawn = tempo_corrente
 
         # Controlla se è ora di spawnare un power-up basato sul punteggio
         if self.punteggio - self.punteggio_ultimo_power_up >= self.punteggio_intervallo_power_up:
@@ -238,13 +344,13 @@ class ScenaGioco(Scena):
         # Aggiorna tutti i power-up attivi
         for power_up in self.power_ups[:]:
             power_up.aggiorna(delta_tempo)
-            
+
             # Controlla se il power-up ha colpito il giocatore
             if power_up.rect.colliderect(self.nave_giocatore.rect):
                 self.mostra_messaggio_power_up(power_up.tipo)
                 power_up.applica_effetto(self)
                 power_up.attivo = False
-            
+
             # Rimuovi power-up non attivi
             if not power_up.attivo:
                 self.power_ups.remove(power_up)
@@ -318,10 +424,10 @@ class ScenaGioco(Scena):
         min_x = self.area_gioco.left + 10
         max_x = self.area_gioco.right - 40
         x_pos = random.randint(min_x, max_x)
-        
+
         # Crea il power-up appena sopra lo schermo
         power_up = PowerUp(x_pos, -30)
-        
+
         # Aggiungi alla lista dei power-up attivi
         self.power_ups.append(power_up)
 
@@ -348,6 +454,18 @@ class ScenaGioco(Scena):
         for power_up in self.power_ups:
             power_up.disegna(schermo)
 
+        # Disegna il boss se attivo
+        if self.boss_attivo and self.boss:
+            self.boss.disegna(schermo)
+
+        # Disegna tutti i laser del boss
+        for laser in self.laser_boss:
+            laser.disegna(schermo)
+
+        # Disegna tutte le palle di fuoco
+        for palla in self.palle_fuoco:
+            palla.disegna(schermo)
+
         # Disegna il punteggio e le vite
         font = pygame.font.SysFont("Arial", 24)
         testo_punteggio = font.render(f"Punti: {self.punteggio}", True, (255, 255, 255))
@@ -361,20 +479,20 @@ class ScenaGioco(Scena):
         if self.messaggio_power_up and tempo_corrente - self.tempo_messaggio_power_up < self.durata_messaggio_power_up:
             # Crea un font più grande per il messaggio del power-up
             font_power_up = pygame.font.SysFont("Arial", 36, bold=True)
-            
+
             # Crea il rendering del testo con un colore vivace
             testo_power_up = font_power_up.render(self.messaggio_power_up, True, (255, 255, 0))
-            
+
             # Posiziona il messaggio in alto al centro dello schermo
             pos_x = (config.GIOCO_LARGHEZZA - testo_power_up.get_width()) // 2
             pos_y = 60
-            
+
             # Disegna un rettangolo semi-trasparente dietro il testo per migliorare la leggibilità
             sfondo_msg = pygame.Surface((testo_power_up.get_width() + 20, testo_power_up.get_height() + 10))
             sfondo_msg.set_alpha(150)  # Imposta trasparenza
             sfondo_msg.fill((0, 0, 0))  # Colore nero
             schermo.blit(sfondo_msg, (pos_x - 10, pos_y - 5))
-            
+
             # Disegna il testo
             schermo.blit(testo_power_up, (pos_x, pos_y))
 
@@ -388,15 +506,33 @@ class ScenaGioco(Scena):
 
     def salva_stato(self):
         """Salva lo stato attuale per il rewind"""
-        return {
+        stato = {
             'nave_x': self.nave_giocatore.x,
             'nave_y': self.nave_giocatore.y,
-            'lasers': [(laser.x, laser.y) for laser in self.lasers]
+            'lasers': [(laser.x, laser.y) for laser in self.lasers],
+            'punteggio': self.punteggio,
+            'vite': self.vite
         }
+
+        # Salva lo stato del boss se attivo
+        if self.boss_attivo and self.boss:
+            stato['boss_attivo'] = True
+            stato['boss_x'] = self.boss.x
+            stato['boss_y'] = self.boss.y
+            stato['boss_salute'] = self.boss.salute
+            stato['laser_boss'] = [(laser.x, laser.y) for laser in self.laser_boss]
+            stato['palle_fuoco'] = [(palla.x, palla.y) for palla in self.palle_fuoco]
+        else:
+            stato['boss_attivo'] = False
+
+        return stato
 
     def carica_stato(self, stato):
         """Carica uno stato salvato durante il rewind"""
-        if stato and 'nave_x' in stato:
+        if not stato:
+            return
+
+        if 'nave_x' in stato:
             self.nave_giocatore.x = stato['nave_x']
             self.nave_giocatore.y = stato['nave_y']
             self.nave_giocatore.rect.x = int(self.nave_giocatore.x)
@@ -407,6 +543,50 @@ class ScenaGioco(Scena):
             if 'lasers' in stato:
                 for pos_laser in stato['lasers']:
                     self.lasers.append(Laser(pos_laser[0], pos_laser[1]))
+
+            # Ripristina il punteggio e le vite
+            if 'punteggio' in stato:
+                self.punteggio = stato['punteggio']
+            if 'vite' in stato:
+                self.vite = stato['vite']
+                self.nave_giocatore.danno = 3 - self.vite
+                self.nave_giocatore.immagine = self.nave_giocatore.immagini[self.nave_giocatore.danno]
+
+            # Ripristina lo stato del boss
+            if 'boss_attivo' in stato:
+                self.boss_attivo = stato['boss_attivo']
+
+                if self.boss_attivo:
+                    # Se il boss era attivo ma non c'è più, ricrealo
+                    if not self.boss:
+                        self.boss = Boss(self.area_gioco, self.livello_boss)
+
+                    # Ripristina la posizione e la salute del boss
+                    if 'boss_x' in stato and 'boss_y' in stato:
+                        self.boss.x = stato['boss_x']
+                        self.boss.y = stato['boss_y']
+                        self.boss.rect.x = int(self.boss.x)
+                        self.boss.rect.y = int(self.boss.y)
+
+                    if 'boss_salute' in stato:
+                        self.boss.salute = stato['boss_salute']
+
+                    # Ricrea i laser del boss
+                    self.laser_boss = []
+                    if 'laser_boss' in stato:
+                        for pos_laser in stato['laser_boss']:
+                            self.laser_boss.append(BossLaser(pos_laser[0], pos_laser[1]))
+
+                    # Ricrea le palle di fuoco
+                    self.palle_fuoco = []
+                    if 'palle_fuoco' in stato:
+                        for pos_palla in stato['palle_fuoco']:
+                            self.palle_fuoco.append(PallaDiFuoco(pos_palla[0], pos_palla[1]))
+                else:
+                    # Se il boss non era attivo, assicurati che sia rimosso
+                    self.boss = None
+                    self.laser_boss.clear()
+                    self.palle_fuoco.clear()
 
 
 class Nave:
@@ -487,13 +667,11 @@ class Nave:
             self.x -= self.velocita * delta_tempo
         if self.movimento_destra and not self.movimento_sinistra:
             self.x += self.velocita * delta_tempo
-
         # Controlla i limiti dell'area di gioco
         if self.x < self.area_gioco.left:
             self.x = self.area_gioco.left
         elif self.x + self.larghezza > self.area_gioco.right:
             self.x = self.area_gioco.right - self.larghezza
-
         # Aggiorna il rettangolo di collisione
         self.rect.x = int(self.x)
         self.rect.y = int(self.y)
@@ -503,14 +681,12 @@ class Nave:
         # Verifica che sia passato abbastanza tempo dall'ultimo sparo
         if tempo_corrente - self.tempo_ultimo_sparo < self.ritardo_sparo:
             return None
-
         # Crea un nuovo laser al centro della nave
         x_laser = self.x + (self.larghezza // 2) - 2  # 2 è metà della larghezza del laser
         y_laser = self.y - 5  # Poco sopra la nave
-
         self.tempo_ultimo_sparo = tempo_corrente
         return Laser(x_laser, y_laser)
-
+    
     def disegna(self, schermo):
         """Disegna la nave sullo schermo"""
         schermo.blit(self.immagine, self.rect)
