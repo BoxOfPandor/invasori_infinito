@@ -7,11 +7,12 @@ Gestisce il gameplay principale
 
 import pygame
 import os
-import random  # Add this import
+import random
 from core.scena import Scena
 import config
 from logic.laser import Laser
 from logic.nemico import Nemico
+from logic.power_up import PowerUp
 
 
 class ScenaGioco(Scena):
@@ -26,6 +27,7 @@ class ScenaGioco(Scena):
         self.nave_giocatore = None
         self.lasers = []  # Lista per tenere traccia dei laser attivi
         self.nemici = []
+        self.power_ups = []  # Lista per i power-up attivi
         self.vite = 4  # Giocatore inizia con 4 vite
         self.game_over_status = False
 
@@ -33,6 +35,15 @@ class ScenaGioco(Scena):
         self.intervallo_spawn_base = 1500  # Intervallo base (1.5 secondi)
         self.intervallo_spawn_minimo = 300  # Intervallo minimo (0.3 secondi)
         self.tempo_ultimo_spawn = 0
+
+        # Parametri per lo spawn dei power-up basato sul punteggio
+        self.punteggio_ultimo_power_up = 0
+        self.punteggio_intervallo_power_up = 500  # Spawn power-up ogni 500 punti
+        
+        # Parametri per il messaggio power-up
+        self.messaggio_power_up = ""
+        self.tempo_messaggio_power_up = 0
+        self.durata_messaggio_power_up = 3000  # 3 secondi in millisecondi
 
     def calcola_intervallo_spawn(self):
         """Calcola l'intervallo di spawn in base al punteggio"""
@@ -52,8 +63,12 @@ class ScenaGioco(Scena):
         self.game_over_status = False
         self.vite = 4
         self.punteggio = 0
+        self.punteggio_ultimo_power_up = 0
         self.lasers.clear()
         self.nemici.clear()
+        self.power_ups.clear()
+        self.messaggio_power_up = ""
+        self.tempo_messaggio_power_up = 0
 
         # Carica l'immagine di sfondo
         percorso_sfondo = os.path.join("assets", "img", "sfondo_gioco.jpg")
@@ -167,6 +182,18 @@ class ScenaGioco(Scena):
             elif evento.key == pygame.K_UP:
                 self.nave_giocatore.sparo_attivo = False
 
+    def mostra_messaggio_power_up(self, tipo_power_up):
+        """Mostra un messaggio che indica quale power-up è stato raccolto"""
+        messaggi = {
+            PowerUp.TIPO_CLEAR_SCREEN: "ELIMINA NEMICI!",
+            PowerUp.TIPO_FIRE_RATE: "VELOCITÀ DI FUOCO +10%!",
+            PowerUp.TIPO_SPEED: "VELOCITÀ MOVIMENTO +10%!",
+            PowerUp.TIPO_EXTRA_LIFE: "VITA EXTRA!"
+        }
+        
+        self.messaggio_power_up = messaggi.get(tipo_power_up, "POWER-UP!")
+        self.tempo_messaggio_power_up = pygame.time.get_ticks()
+
     def aggiorna(self, delta_tempo):
         """Aggiorna la logica del gioco"""
         # Controlla se game over
@@ -189,12 +216,29 @@ class ScenaGioco(Scena):
             if not laser.attivo:
                 self.lasers.remove(laser)
 
-        # Nel metodo aggiorna, sostituisci:
-        # if tempo_corrente - self.tempo_ultimo_spawn > self.intervallo_spawn:
-        # con:
+        # Gestione spawn nemici
         if tempo_corrente - self.tempo_ultimo_spawn > self.calcola_intervallo_spawn():
             self.spawn_nemico()
             self.tempo_ultimo_spawn = tempo_corrente
+
+        # Controlla se è ora di spawnare un power-up basato sul punteggio
+        if self.punteggio - self.punteggio_ultimo_power_up >= self.punteggio_intervallo_power_up:
+            self.spawn_power_up()
+            self.punteggio_ultimo_power_up = self.punteggio
+
+        # Aggiorna tutti i power-up attivi
+        for power_up in self.power_ups[:]:
+            power_up.aggiorna(delta_tempo)
+            
+            # Controlla se il power-up ha colpito il giocatore
+            if power_up.rect.colliderect(self.nave_giocatore.rect):
+                self.mostra_messaggio_power_up(power_up.tipo)
+                power_up.applica_effetto(self)
+                power_up.attivo = False
+            
+            # Rimuovi power-up non attivi
+            if not power_up.attivo:
+                self.power_ups.remove(power_up)
 
         # Aggiorna tutti i nemici attivi e controlla collisioni con giocatore
         for nemico in self.nemici[:]:
@@ -259,6 +303,19 @@ class ScenaGioco(Scena):
         # Aggiungi alla lista dei nemici attivi
         self.nemici.append(nemico)
 
+    def spawn_power_up(self):
+        """Spawna un nuovo power-up in una posizione casuale"""
+        # Calcola una posizione x casuale all'interno dell'area di gioco
+        min_x = self.area_gioco.left + 10
+        max_x = self.area_gioco.right - 40
+        x_pos = random.randint(min_x, max_x)
+        
+        # Crea il power-up appena sopra lo schermo
+        power_up = PowerUp(x_pos, -30)
+        
+        # Aggiungi alla lista dei power-up attivi
+        self.power_ups.append(power_up)
+
     def disegna(self, schermo):
         """Disegna gli elementi del gioco"""
         # Disegna lo sfondo su tutto lo schermo
@@ -278,6 +335,10 @@ class ScenaGioco(Scena):
         for nemico in self.nemici:
             nemico.disegna(schermo)
 
+        # Disegna tutti i power-up attivi
+        for power_up in self.power_ups:
+            power_up.disegna(schermo)
+
         # Disegna il punteggio e le vite
         font = pygame.font.SysFont("Arial", 24)
         testo_punteggio = font.render(f"Punti: {self.punteggio}", True, (255, 255, 255))
@@ -285,6 +346,28 @@ class ScenaGioco(Scena):
 
         testo_vite = font.render(f"Vite: {self.vite}", True, (255, 255, 255))
         schermo.blit(testo_vite, (self.area_gioco.right - testo_vite.get_width() - 10, 20))
+
+        # Disegna il messaggio del power-up se è attivo
+        tempo_corrente = pygame.time.get_ticks()
+        if self.messaggio_power_up and tempo_corrente - self.tempo_messaggio_power_up < self.durata_messaggio_power_up:
+            # Crea un font più grande per il messaggio del power-up
+            font_power_up = pygame.font.SysFont("Arial", 36, bold=True)
+            
+            # Crea il rendering del testo con un colore vivace
+            testo_power_up = font_power_up.render(self.messaggio_power_up, True, (255, 255, 0))
+            
+            # Posiziona il messaggio in alto al centro dello schermo
+            pos_x = (config.GIOCO_LARGHEZZA - testo_power_up.get_width()) // 2
+            pos_y = 60
+            
+            # Disegna un rettangolo semi-trasparente dietro il testo per migliorare la leggibilità
+            sfondo_msg = pygame.Surface((testo_power_up.get_width() + 20, testo_power_up.get_height() + 10))
+            sfondo_msg.set_alpha(150)  # Imposta trasparenza
+            sfondo_msg.fill((0, 0, 0))  # Colore nero
+            schermo.blit(sfondo_msg, (pos_x - 10, pos_y - 5))
+            
+            # Disegna il testo
+            schermo.blit(testo_power_up, (pos_x, pos_y))
 
         # Mostra game over
         if self.game_over_status:
@@ -323,8 +406,8 @@ class Nave:
     def __init__(self, area_gioco):
         """Inizializza la nave del giocatore"""
         self.area_gioco = area_gioco
-        self.larghezza = 40
-        self.altezza = 40
+        self.larghezza = 50  # Modificato da 40
+        self.altezza = 50    # Modificato da 40
         self.x = area_gioco.centerx - self.larghezza // 2
         self.y = area_gioco.bottom - self.altezza - 10
 
