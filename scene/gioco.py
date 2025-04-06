@@ -235,6 +235,12 @@ class ScenaGioco(Scena):
             self.boss = Boss(self.area_gioco, self.livello_boss)
             self.boss_attivo = True
             self.mostra_messaggio_boss(False)  # Mostra messaggio di arrivo boss
+            
+            # Elimina tutti i nemici rimanenti sul campo
+            for nemico in self.nemici[:]:
+                nemico.attivo = False
+            self.nemici.clear()
+            
             return True
         return False
 
