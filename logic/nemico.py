@@ -23,6 +23,7 @@ class Nemico:
             self.colore = (255, 0, 0)  # Rosso
             self.punti = 10
             self.salute = 1  # Nemico debole, muore con un colpo
+            self.nome_file = "Enemy_1.png"
         elif tipo == 2:  # Nemico medio
             self.larghezza = 50
             self.altezza = 40
@@ -30,13 +31,15 @@ class Nemico:
             self.colore = (255, 100, 0)  # Arancione
             self.punti = 20
             self.salute = 2  # Nemico medio, richiede due colpi
-        else:  # Nemico grande/boss
+            self.nome_file = "Enemy_2.png"
+        else:  # Nemico grande
             self.larghezza = 70
             self.altezza = 50
             self.velocita = 60
             self.colore = (255, 0, 100)  # Fucsia
             self.punti = 30
             self.salute = 3  # Nemico resistente, richiede tre colpi
+            self.nome_file = "Enemy_3.png"
 
         # Posizione
         self.x = x
@@ -62,10 +65,12 @@ class Nemico:
     def carica_immagine(self):
         """Carica l'immagine del nemico o crea un placeholder"""
         try:
-            percorso = os.path.join("assets", "img", f"nemico{self.tipo}.png")
+            # Modificato per utilizzare le immagini dalla cartella entita/Nautolan
+            percorso = os.path.join("entita", "Nautolan", self.nome_file)
             immagine = pygame.image.load(percorso).convert_alpha()
             return pygame.transform.scale(immagine, (self.larghezza, self.altezza))
-        except:
+        except Exception as e:
+            print(f"Errore nel caricamento dell'immagine {self.nome_file}: {e}")
             # Se l'immagine non è disponibile, crea un placeholder
             superficie = pygame.Surface((self.larghezza, self.altezza), pygame.SRCALPHA)
             pygame.draw.rect(superficie, self.colore, (0, 0, self.larghezza, self.altezza))
@@ -84,6 +89,9 @@ class Nemico:
     def disegna(self, schermo):
         """Disegna il nemico sullo schermo"""
         schermo.blit(self.immagine, self.rect)
+        
+        # Debug: visualizza il rettangolo di collisione
+        # pygame.draw.rect(schermo, (255, 0, 0), self.rect, 1)
 
     def collide_con(self, altro_rect):
         """Controlla se il nemico collide con un altro rettangolo"""
